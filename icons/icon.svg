@@ -1,0 +1,23 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="128" height="128" rx="24" fill="#009A00"/>
+  
+  <!-- TOC图标 -->
+  <g fill="white" opacity="0.95">
+    <!-- 第一级标题 -->
+    <circle cx="32" cy="32" r="4"/>
+    <rect x="44" y="28" width="52" height="8" rx="4"/>
+    
+    <!-- 第二级标题 -->
+    <circle cx="38" cy="56" r="3.5"/>
+    <rect x="50" y="53" width="40" height="7" rx="3.5"/>
+    
+    <!-- 第三级标题 -->
+    <circle cx="44" cy="80" r="3"/>
+    <rect x="56" y="77" width="32" height="6" rx="3"/>
+    
+    <!-- 第四级标题 -->
+    <circle cx="50" cy="96" r="3"/>
+    <rect x="62" y="93" width="24" height="6" rx="3"/>
+  </g>
+</svg>
