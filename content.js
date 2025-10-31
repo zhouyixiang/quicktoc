@@ -11,6 +11,7 @@ if (!window.tocGenerator) {
       this.initialPosition = { x: 0, y: 0 };
       this.dragOffset = { x: 0, y: 0 };
       this.isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this.activeHeading = null;
     }
 
     init() {
@@ -104,7 +105,7 @@ if (!window.tocGenerator) {
         const h1s = this.headings.filter(h => h.tagName === 'H1');
         const hideSingleH1 = items.hideSingleH1 && h1s.length === 1;
 
-        this.headings.forEach(heading => {
+        this.headings.forEach((heading, index) => {
           if (hideSingleH1 && heading.tagName === 'H1') {
             return;
           }
@@ -113,13 +114,54 @@ if (!window.tocGenerator) {
             const item = document.createElement('li');
             item.className = `page-toc-item page-toc-h${level}`;
             item.textContent = heading.textContent;
+            item.dataset.headingIndex = index;
+            heading.tocItem = item;
+
             item.addEventListener('click', () => {
               heading.scrollIntoView({ behavior: 'smooth' });
             });
             list.appendChild(item);
           }
         });
+        this.updateActiveHeading();
       });
+    }
+
+    updateActiveHeading() {
+      let activeHeading = null;
+
+      for (let i = 0; i < this.headings.length; i++) {
+        const heading = this.headings[i];
+        const rect = heading.getBoundingClientRect();
+        if (rect.top <= 100) {
+          activeHeading = heading;
+        } else {
+          break;
+        }
+      }
+
+      if (activeHeading !== this.activeHeading) {
+        this.headings.forEach(h => h.tocItem && h.tocItem.classList.remove('active'));
+
+        if (activeHeading && activeHeading.tocItem) {
+          let current = activeHeading;
+          while (current && current.tocItem) {
+            current.tocItem.classList.add('active');
+            const currentIndex = parseInt(current.tocItem.dataset.headingIndex);
+            const currentLevel = parseInt(current.tagName[1]);
+            let parent = null;
+            for (let i = currentIndex - 1; i >= 0; i--) {
+              const parentLevel = parseInt(this.headings[i].tagName[1]);
+              if (parentLevel < currentLevel) {
+                parent = this.headings[i];
+                break;
+              }
+            }
+            current = parent;
+          }
+        }
+        this.activeHeading = activeHeading;
+      }
     }
 
     setupEventListeners() {
@@ -264,6 +306,8 @@ if (!window.tocGenerator) {
         this.toc.classList.toggle('dark-mode', this.isDarkMode);
         themeToggle.innerHTML = this.isDarkMode ? t('lightMode') : t('darkMode');
       });
+
+      document.addEventListener('scroll', () => this.updateActiveHeading());
     }
   }
 

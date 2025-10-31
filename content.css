@@ -202,3 +202,12 @@
 .page-toc.dark-mode .page-toc-theme-toggle {
   color: #e0e0e0;
 } 
+
+.page-toc-item.active {
+  font-weight: bold;
+  color: #0055a4;
+}
+
+.page-toc.dark-mode .page-toc-item.active {
+  color: #80bfff;
+}
