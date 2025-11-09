@@ -73,7 +73,7 @@ function saveThemes() {
 
 chrome.storage.sync.get({
   hideSingleH1: true,
-  fontSize: 14,
+  fontSize: 12,
   opacity: 100,
   themes: DEFAULT_THEMES
 }, (items) => {
