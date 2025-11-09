@@ -6,6 +6,6 @@ chrome.action.onClicked.addListener((tab) => {
   
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['i18n.js', 'content.js']
+    files: ['i18n.js', 'icons.js', 'content.js']
   });
 }); 

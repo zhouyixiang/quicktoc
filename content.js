@@ -1,3 +1,24 @@
+var DEFAULT_THEMES = {
+  light: {
+    font: '#333333',
+    background: '#ffffff',
+    icon: '#000000',
+    activeHeader: '#333333',
+    activeHeaderBackground: '#f5f5f5',
+    titleFont: '#333333',
+    titleBackground: '#f5f5f5',
+  },
+  dark: {
+    font: '#e0e0e0',
+    background: '#2d2d2d',
+    icon: '#ffffff',
+    activeHeader: '#e0e0e0',
+    activeHeaderBackground: '#363636',
+    titleFont: '#e0e0e0',
+    titleBackground: '#363636',
+  }
+};
+
 if (!window.tocGenerator) {
   class TOCGenerator {
     constructor() {
@@ -12,11 +33,66 @@ if (!window.tocGenerator) {
       this.dragOffset = { x: 0, y: 0 };
       this.isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       this.activeHeading = null;
+      this.observer = null;
     }
 
     init() {
       this.generateTOC();
       this.setupEventListeners();
+      this.setupIntersectionObserver();
+    }
+
+    toggleVisibility() {
+      if (this.toc) {
+        const isVisible = this.toc.style.display !== 'none';
+        this.toc.style.display = isVisible ? 'none' : 'flex';
+      }
+    }
+
+    applyTheme() {
+      chrome.storage.sync.get({ themes: DEFAULT_THEMES }, (items) => {
+        const theme = this.isDarkMode ? items.themes.dark : items.themes.light;
+        const styleId = 'quicktoc-theme-styles';
+        let styleTag = document.getElementById(styleId);
+        if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.id = styleId;
+          document.head.appendChild(styleTag);
+        }
+        styleTag.innerHTML = `
+          .page-toc {
+            background-color: ${theme.background} !important;
+            color: ${theme.font} !important;
+          }
+          .page-toc-header {
+            background-color: ${theme.activeHeaderBackground} !important;
+          }
+          .page-toc-title {
+            color: ${theme.titleFont} !important;
+            background-color: ${theme.titleBackground} !important;
+          }
+          .page-toc-level-select {
+            color: ${theme.titleFont} !important;
+            background-color: ${theme.titleBackground} !important;
+          }
+          .page-toc-collapse-all, .page-toc-expand-all, .page-toc-theme-toggle, .page-toc-close {
+            color: ${theme.icon} !important;
+          }
+          .page-toc.dark-mode .page-toc-item-text:hover {
+            color: #66b3ff;
+          }
+          .page-toc-item-text:hover {
+            color: #0066cc;
+          }
+          .page-toc-item.active {
+            background-color: ${theme.activeHeaderBackground} !important;
+          }
+          .page-toc-item.active > .page-toc-item-text {
+            color: ${theme.activeHeader} !important;
+            font-weight: bold;
+          }
+        `;
+      });
     }
 
     generateTOC() {
@@ -27,6 +103,9 @@ if (!window.tocGenerator) {
       // 创建TOC容器
       this.toc = document.createElement('div');
       this.toc.className = 'page-toc';
+      chrome.storage.sync.get({opacity: 100}, (items) => {
+        this.toc.style.opacity = items.opacity / 100;
+      });
       
       // 创建TOC头部
       const header = document.createElement('div');
@@ -38,11 +117,21 @@ if (!window.tocGenerator) {
       
       const controls = document.createElement('div');
       controls.className = 'page-toc-controls';
+
+      // 创建展开/折叠按钮
+      const collapseAllButton = document.createElement('button');
+      collapseAllButton.className = 'page-toc-collapse-all';
+      collapseAllButton.title = 'Collapse All';
+      collapseAllButton.innerHTML = ICONS.collapse;
+      const expandAllButton = document.createElement('button');
+      expandAllButton.className = 'page-toc-expand-all';
+      expandAllButton.title = 'Expand All';
+      expandAllButton.innerHTML = ICONS.expand;
       
       // 创建主题切换按钮
       const themeToggle = document.createElement('button');
       themeToggle.className = 'page-toc-theme-toggle';
-      themeToggle.innerHTML = this.isDarkMode ? t('lightMode') : t('darkMode');
+      themeToggle.innerHTML = this.isDarkMode ? ICONS.moon : ICONS.sun;
       
       // 创建级别选择器
       const levelSelect = document.createElement('select');
@@ -63,6 +152,8 @@ if (!window.tocGenerator) {
       closeButton.innerHTML = '×';
       
       controls.appendChild(themeToggle);
+      controls.appendChild(collapseAllButton);
+      controls.appendChild(expandAllButton);
       controls.appendChild(levelSelect);
       controls.appendChild(closeButton);
       header.appendChild(title);
@@ -93,75 +184,106 @@ if (!window.tocGenerator) {
       
       document.body.appendChild(this.toc);
 
-      // 设置初始主题
-      if (this.isDarkMode) {
-        this.toc.classList.add('dark-mode');
-      }
+      this.applyTheme();
     }
 
     updateTOCContent(list) {
-      chrome.storage.sync.get({hideSingleH1: true}, (items) => {
-        list.innerHTML = '';
-        const h1s = this.headings.filter(h => h.tagName === 'H1');
-        const hideSingleH1 = items.hideSingleH1 && h1s.length === 1;
+        chrome.storage.sync.get({ hideSingleH1: true, fontSize: 14 }, (items) => {
+            list.innerHTML = '';
+            list.style.fontSize = `${items.fontSize}px`;
+            const h1s = this.headings.filter(h => h.tagName === 'H1');
+            const hideSingleH1 = items.hideSingleH1 && h1s.length === 1;
 
-        this.headings.forEach((heading, index) => {
-          if (hideSingleH1 && heading.tagName === 'H1') {
-            return;
-          }
-          const level = parseInt(heading.tagName[1]);
-          if (level <= this.minLevel) {
-            const item = document.createElement('li');
-            item.className = `page-toc-item page-toc-h${level}`;
-            item.textContent = heading.textContent;
-            item.dataset.headingIndex = index;
-            heading.tocItem = item;
+            const tocRoots = [];
+            let currentTocItems = {};
 
-            item.addEventListener('click', () => {
-              heading.scrollIntoView({ behavior: 'smooth' });
+            this.headings.forEach((heading, index) => {
+                if (hideSingleH1 && heading.tagName === 'H1') return;
+
+                const level = parseInt(heading.tagName.substring(1));
+                if (level > this.minLevel) return;
+
+                const tocItem = document.createElement('li');
+                tocItem.className = `page-toc-item page-toc-h${level}`;
+                heading.tocItem = tocItem;
+
+                const textSpan = document.createElement('span');
+                textSpan.className = 'page-toc-item-text';
+                textSpan.textContent = heading.textContent;
+                tocItem.appendChild(textSpan);
+
+                textSpan.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    heading.scrollIntoView({ behavior: 'smooth' });
+                });
+
+                if (level === 1 || tocRoots.length === 0) {
+                    tocRoots.push(tocItem);
+                    currentTocItems = { [level]: tocItem };
+                } else {
+                    let parentLevel = level - 1;
+                    while (parentLevel > 0 && !currentTocItems[parentLevel]) {
+                        parentLevel--;
+                    }
+                    const parentTocItem = currentTocItems[parentLevel];
+                    if (parentTocItem) {
+                        let sublist = parentTocItem.querySelector('.page-toc-list');
+                        if (!sublist) {
+                            sublist = document.createElement('ul');
+                            sublist.className = 'page-toc-list';
+                            parentTocItem.appendChild(sublist);
+                            parentTocItem.classList.add('collapsible');
+                        }
+                        sublist.appendChild(tocItem);
+                    } else {
+                        tocRoots.push(tocItem);
+                    }
+                    currentTocItems[level] = tocItem;
+                }
             });
-            list.appendChild(item);
-          }
+
+            tocRoots.forEach(item => list.appendChild(item));
         });
-        this.updateActiveHeading();
-      });
     }
 
-    updateActiveHeading() {
-      let activeHeading = null;
+    setupIntersectionObserver() {
+      const options = {
+        root: null,
+        rootMargin: '0px 0px -50% 0px',
+        threshold: 1.0
+      };
 
-      for (let i = 0; i < this.headings.length; i++) {
-        const heading = this.headings[i];
-        const rect = heading.getBoundingClientRect();
-        if (rect.top <= 100) {
-          activeHeading = heading;
-        } else {
-          break;
+      this.observer = new IntersectionObserver((entries) => {
+        const intersectingHeadings = entries
+          .filter(entry => entry.isIntersecting)
+          .map(entry => entry.target);
+
+        if (intersectingHeadings.length > 0) {
+          this.setActiveHeading(intersectingHeadings[intersectingHeadings.length - 1]);
         }
-      }
+      }, options);
 
-      if (activeHeading !== this.activeHeading) {
-        this.headings.forEach(h => h.tocItem && h.tocItem.classList.remove('active'));
+      this.headings.forEach(heading => this.observer.observe(heading));
+    }
 
-        if (activeHeading && activeHeading.tocItem) {
-          let current = activeHeading;
-          while (current && current.tocItem) {
-            current.tocItem.classList.add('active');
-            const currentIndex = parseInt(current.tocItem.dataset.headingIndex);
-            const currentLevel = parseInt(current.tagName[1]);
-            let parent = null;
-            for (let i = currentIndex - 1; i >= 0; i--) {
-              const parentLevel = parseInt(this.headings[i].tagName[1]);
-              if (parentLevel < currentLevel) {
-                parent = this.headings[i];
-                break;
-              }
-            }
-            current = parent;
+    setActiveHeading(heading) {
+      if (heading === this.activeHeading) return;
+
+      this.toc.querySelectorAll('.active').forEach(item => {
+        item.classList.remove('active');
+      });
+
+      if (heading && heading.tocItem) {
+        let current = heading.tocItem;
+        while (current && current.classList.contains('page-toc-item')) {
+          current.classList.add('active');
+          if (current.classList.contains('collapsible')) {
+            current.classList.remove('collapsed');
           }
+          current = current.parentElement.closest('.page-toc-item');
         }
-        this.activeHeading = activeHeading;
       }
+      this.activeHeading = heading;
     }
 
     setupEventListeners() {
@@ -169,6 +291,9 @@ if (!window.tocGenerator) {
       const resizeHandles = this.toc.querySelectorAll('.page-toc-resize');
       const levelSelect = this.toc.querySelector('.page-toc-level-select');
       const closeButton = this.toc.querySelector('.page-toc-close');
+      const collapseAllButton = this.toc.querySelector('.page-toc-collapse-all');
+      const expandAllButton = this.toc.querySelector('.page-toc-expand-all');
+      const content = this.toc.querySelector('.page-toc-content');
       
       // 拖拽事件
       header.addEventListener('mousedown', (e) => {
@@ -210,7 +335,27 @@ if (!window.tocGenerator) {
 
       // 关闭按钮事件
       closeButton.addEventListener('click', () => {
-        this.toc.remove();
+        this.toggleVisibility();
+      });
+
+      // 折叠/展开事件
+      collapseAllButton.addEventListener('click', () => {
+        this.toc.querySelectorAll('.collapsible').forEach(item => {
+          item.classList.add('collapsed');
+        });
+      });
+
+      expandAllButton.addEventListener('click', () => {
+        this.toc.querySelectorAll('.collapsible').forEach(item => {
+          item.classList.remove('collapsed');
+        });
+      });
+
+      content.addEventListener('click', (e) => {
+        const item = e.target.closest('.collapsible');
+        if (item && e.target.closest('.page-toc-item') === item) {
+          item.classList.toggle('collapsed');
+        }
       });
 
       // 全局鼠标事件
@@ -296,26 +441,21 @@ if (!window.tocGenerator) {
       const themeToggle = this.toc.querySelector('.page-toc-theme-toggle');
       themeToggle.addEventListener('click', () => {
         this.isDarkMode = !this.isDarkMode;
-        this.toc.classList.toggle('dark-mode');
-        themeToggle.innerHTML = this.isDarkMode ? t('lightMode') : t('darkMode');
+        themeToggle.innerHTML = this.isDarkMode ? ICONS.moon : ICONS.sun;
+        this.applyTheme();
       });
 
       // 系统主题变化监听
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
         this.isDarkMode = e.matches;
-        this.toc.classList.toggle('dark-mode', this.isDarkMode);
-        themeToggle.innerHTML = this.isDarkMode ? t('lightMode') : t('darkMode');
+        themeToggle.innerHTML = this.isDarkMode ? ICONS.moon : ICONS.sun;
+        this.applyTheme();
       });
-
-      document.addEventListener('scroll', () => this.updateActiveHeading());
     }
   }
 
   window.tocGenerator = new TOCGenerator();
   window.tocGenerator.init();
 } else {
-  // 如果TOC已经存在但被关闭了，重新初始化
-  if (!document.querySelector('.page-toc')) {
-    window.tocGenerator.init();
-  }
-} 
+  window.tocGenerator.toggleVisibility();
+}

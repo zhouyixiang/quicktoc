@@ -20,6 +20,42 @@
     <input type="checkbox" id="hideSingleH1">
     <span id="hideSingleH1Label"></span>
   </label>
+  <label>
+    <span id="fontSizeLabel"></span>:
+    <input type="number" id="fontSize" min="10" max="24" step="1">
+  </label>
+  <label>
+    <span id="opacityLabel"></span>:
+    <input type="range" id="opacity" min="20" max="100" step="5">
+    <span id="opacityValue"></span>
+  </label>
+
+  <hr>
+
+  <fieldset>
+    <legend id="lightThemeLegend"></legend>
+    <label><span id="fontColorLabel"></span>: <input type="color" id="light-font"></label>
+    <label><span id="backgroundColorLabel"></span>: <input type="color" id="light-background"></label>
+    <label><span id="iconColorLabel"></span>: <input type="color" id="light-icon"></label>
+    <label><span id="activeHeaderColorLabel"></span>: <input type="color" id="light-activeHeader"></label>
+    <label><span id="activeHeaderBackgroundColorLabel"></span>: <input type="color" id="light-activeHeaderBackground"></label>
+    <label><span id="titleFontColorLabel"></span>: <input type="color" id="light-titleFont"></label>
+    <label><span id="titleBackgroundColorLabel"></span>: <input type="color" id="light-titleBackground"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend id="darkThemeLegend"></legend>
+    <label><span id="fontColorLabel"></span>: <input type="color" id="dark-font"></label>
+    <label><span id="backgroundColorLabel"></span>: <input type="color" id="dark-background"></label>
+    <label><span id="iconColorLabel"></span>: <input type="color" id="dark-icon"></label>
+    <label><span id="activeHeaderColorLabel"></span>: <input type="color" id="dark-activeHeader"></label>
+    <label><span id="activeHeaderBackgroundColorLabel"></span>: <input type="color" id="dark-activeHeaderBackground"></label>
+    <label><span id="titleFontColorLabel"></span>: <input type="color" id="dark-titleFont"></label>
+    <label><span id="titleBackgroundColorLabel"></span>: <input type="color" id="dark-titleBackground"></label>
+  </fieldset>
+
+  <button id="resetThemes"></button>
+
   <script src="i18n.js"></script>
   <script src="options.js"></script>
 </body>
